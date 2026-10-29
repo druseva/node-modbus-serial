@@ -115,7 +115,7 @@ function _readFC2(data, next) {
  * @param {Function} next the function to call next.
  */
 function _readFC3or4(data, next) {
-    const length = data.readUInt8(2);
+    const length = _getReadFC30r4Length(data);
     const contents = [];
 
     for (let i = 0; i < length; i += 2) {
@@ -125,6 +125,31 @@ function _readFC3or4(data, next) {
 
     if (next)
         next(null, { "data": contents, "buffer": data.slice(3, 3 + length) });
+}
+
+/**
+ * Workaround to handle larger response frames.
+ * The length is normally read from the Modbus byte-count field (1 byte,
+ * allowing values from 0 to 255), but this override assumes fixed payload
+ * sizes based on the total received buffer length
+ * - data.length < 512: keep the original byte count.
+ * - data.length >= 512 && data.length <= 2048: assume 1024 bytes.
+ * - data.length > 2048: assume 4096 bytes.
+ * 
+ * Limitations:
+ * Exact boundaries (512 and 2048) may not reflect the actual payload size.
+ * The assumed length may exceed the available data, causing readUInt16BE()
+ * to throw an out-of-range error.
+ * This does not validate the actual Modbus frame or guarantee that the
+ * complete response has been received.
+ * 
+ * @param {Buffer} data the data buffer to parse
+ * @returns number
+ */
+function _getReadFC30r4Length(data) {
+    if(data.length < 512) return data.readUInt8(2);
+
+    return data.length <= 2048 ? 1024 : 4096;
 }
 
 /**
